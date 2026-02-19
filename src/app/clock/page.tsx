@@ -12,7 +12,9 @@ import type { Employee } from "@/lib/db/schema";
 async function getEmployeesWithStatus(): Promise<
   (Employee & { isClockedIn: boolean })[]
 > {
-  const res = await fetch("/api/employees", { cache: "no-store" });
+  const res = await fetch(`/api/employees?t=${Date.now()}`, {
+    cache: "no-store",
+  });
   return res.json();
 }
 
@@ -60,7 +62,10 @@ export default function ClockPage() {
     if (result.success) {
       setAnimationMessage(result.message);
       setTimeout(() => {
-        window.location.reload();
+        setAnimationMessage(null);
+        setSelectedEmployee(null);
+        setBreakModalOpen(false);
+        getEmployeesWithStatus().then(setEmployees);
       }, 2000);
     } else {
       toast({
