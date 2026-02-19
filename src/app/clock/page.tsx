@@ -9,15 +9,21 @@ import { clockIn } from "@/app/actions";
 import { useToast } from "@/components/ui/use-toast";
 import type { Employee } from "@/lib/db/schema";
 
-async function getEmployeesWithStatus(): Promise<(Employee & { isClockedIn: boolean })[]> {
-  const res = await fetch("/api/employees");
+async function getEmployeesWithStatus(): Promise<
+  (Employee & { isClockedIn: boolean })[]
+> {
+  const res = await fetch("/api/employees", { cache: "no-store" });
   return res.json();
 }
 
 export default function ClockPage() {
   const { toast } = useToast();
-  const [employees, setEmployees] = useState<(Employee & { isClockedIn: boolean })[]>([]);
-  const [selectedEmployee, setSelectedEmployee] = useState<(Employee & { isClockedIn: boolean }) | null>(null);
+  const [employees, setEmployees] = useState<
+    (Employee & { isClockedIn: boolean })[]
+  >([]);
+  const [selectedEmployee, setSelectedEmployee] = useState<
+    (Employee & { isClockedIn: boolean }) | null
+  >(null);
   const [isBreakModalOpen, setBreakModalOpen] = useState(false);
   const [animationMessage, setAnimationMessage] = useState<string | null>(null);
 
@@ -47,7 +53,10 @@ export default function ClockPage() {
   const handleClockIn = async (minutes?: number, type?: string) => {
     if (!selectedEmployee) return;
 
-    const result = await clockIn(selectedEmployee.pin, { minutes: minutes || 0, type: type || 'none' });
+    const result = await clockIn(selectedEmployee.pin, {
+      minutes: minutes || 0,
+      type: type || "none",
+    });
     if (result.success) {
       setAnimationMessage(result.message);
       setTimeout(() => {
