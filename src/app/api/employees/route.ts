@@ -12,10 +12,14 @@ export async function GET() {
 
   const employeesWithStatus = allEmployees.map((employee) => {
     const isActive = activeTimeEntries.some(
-      (entry) => entry.employeeId === employee.id
+      (entry) => entry.employeeId === employee.id,
     );
     return { ...employee, isClockedIn: isActive };
   });
 
-  return NextResponse.json(employeesWithStatus);
+  return NextResponse.json(employeesWithStatus, {
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+    },
+  });
 }
