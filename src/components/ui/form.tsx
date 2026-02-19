@@ -41,13 +41,16 @@ const FormField = <
 const useFormField = () => {
   const fieldContext = React.useContext(FormFieldContext);
   const itemContext = React.useContext(FormItemContext);
-  const { getFieldState, formState } = useFormContext();
+  const formContext = useFormContext();
 
-  const fieldState = getFieldState(fieldContext.name, formState);
-
-  if (!fieldContext) {
+  if (!fieldContext.name) {
     throw new Error("useFormField should be used within <FormField>");
   }
+
+  const fieldState = formContext.getFieldState(
+    fieldContext.name,
+    formContext.formState,
+  );
 
   const { id } = itemContext;
 
@@ -144,7 +147,16 @@ const FormMessage = React.forwardRef<
   HTMLParagraphElement,
   React.HTMLAttributes<HTMLParagraphElement>
 >(({ className, children, ...props }, ref) => {
-  const { error, formMessageId } = useFormField();
+  const fieldContext = React.useContext(FormFieldContext);
+  const itemContext = React.useContext(FormItemContext);
+  const formContext = useFormContext();
+  const fieldState = fieldContext.name
+    ? formContext.getFieldState(fieldContext.name, formContext.formState)
+    : { error: undefined };
+  const { error } = fieldState;
+  const formMessageId = itemContext.id
+    ? `${itemContext.id}-form-item-message`
+    : undefined;
   const body = error ? String(error?.message) : children;
 
   if (!body) {
