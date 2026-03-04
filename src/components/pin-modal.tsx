@@ -1,10 +1,14 @@
 "use client";
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import type { Employee } from "@/lib/db/schema";
 import { PinPad } from "./pin-pad";
 import { User } from "lucide-react";
-import { useState } from "react";
 
 interface PinModalProps {
   employee: (Employee & { isClockedIn: boolean }) | null;
@@ -13,14 +17,7 @@ interface PinModalProps {
 }
 
 export function PinModal({ employee, onClose, onSubmit }: PinModalProps) {
-  const [pin, setPin] = useState("");
-
   if (!employee) return null;
-
-  const handlePinSubmit = () => {
-    onSubmit(pin);
-    setPin("");
-  };
 
   return (
     <Dialog open={!!employee} onOpenChange={onClose}>
@@ -47,7 +44,12 @@ export function PinModal({ employee, onClose, onSubmit }: PinModalProps) {
           <h3 className="text-xl font-semibold">Enter Your PIN to Clock In</h3>
           <p className="text-muted-foreground">4-digit PIN</p>
         </div>
-        <PinPad pin={pin} onPinChange={setPin} onSubmit={handlePinSubmit} />
+        <PinPad
+          onSubmit={(pin: string) => onSubmit(pin)}
+          error={null}
+          loading={false}
+          onClearError={() => {}}
+        />
       </DialogContent>
     </Dialog>
   );
