@@ -1,9 +1,12 @@
 import { drizzle } from "drizzle-orm/libsql";
-import { createClient } from "@libsql/client";
+import { createClient } from "@libsql/client/http";
 import * as schema from "./schema";
 
+const rawUrl = process.env.TURSO_DATABASE_URL!;
+const url = rawUrl.replace(/^libsql:\/\//, "https://");
+
 const client = createClient({
-  url: process.env.TURSO_DATABASE_URL!,
+  url,
   authToken: process.env.TURSO_AUTH_TOKEN!,
 });
 
