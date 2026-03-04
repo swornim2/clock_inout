@@ -1,5 +1,6 @@
 import { Clock, LayoutGrid } from "lucide-react";
 import Link from "next/link";
+import { LiveClock } from "@/components/live-clock";
 
 export default function HomePage() {
   return (
@@ -12,6 +13,9 @@ export default function HomePage() {
           TimeTrack
         </h1>
         <p className="mt-2 text-gray-500">Employee time management system</p>
+        <div className="mt-6">
+          <LiveClock />
+        </div>
       </div>
 
       <div className="flex flex-col gap-3 w-full max-w-xs">

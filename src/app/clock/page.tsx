@@ -6,6 +6,7 @@ import { PinPad } from "@/components/pin-pad";
 import { ClockOutModal } from "@/components/clock-out-modal";
 import { ClockedInPanel } from "@/components/clocked-in-panel";
 import { SuccessOverlay } from "@/components/success-overlay";
+import { LiveClock } from "@/components/live-clock";
 
 type Screen =
   | { name: "pin" }
@@ -76,10 +77,11 @@ export default function ClockPage() {
     <main className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
+          <h1 className="text-3xl font-bold text-gray-900 tracking-tight mb-4">
             TimeTrack
           </h1>
-          <p className="text-gray-400 mt-1 text-sm">Enter your 4-digit PIN</p>
+          <LiveClock variant="large" />
+          <p className="text-gray-400 mt-4 text-sm">Enter your 4-digit PIN</p>
         </div>
 
         <PinPad
