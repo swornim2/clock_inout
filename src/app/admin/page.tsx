@@ -1,78 +1,138 @@
-import { getDashboardStats, getShiftReports } from "@/app/actions";
-import { Button } from "@/components/ui/button";
+import {
+  getExtendedDashboardStats,
+  getDailyHoursLast7Days,
+  getClockedInNow,
+} from "@/app/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, Clock, Hourglass, Calendar } from "lucide-react";
-import { ShiftReportsTable } from "@/components/shift-reports-table";
+import {
+  Users,
+  Clock,
+  Hourglass,
+  Calendar,
+  CalendarDays,
+  UserCheck,
+} from "lucide-react";
+import { HoursChart } from "@/components/hours-chart";
+import { format } from "date-fns";
 
-export default async function AdminPage({ searchParams }: { searchParams: { week: string } }) {
-  const stats = await getDashboardStats();
-  const reports = await getShiftReports(searchParams.week);
+export default async function AdminPage() {
+  const [stats, chartData, clockedIn] = await Promise.all([
+    getExtendedDashboardStats(),
+    getDailyHoursLast7Days(),
+    getClockedInNow(),
+  ]);
+
+  const summaryCards = [
+    {
+      label: "Total Employees",
+      value: stats.totalEmployees,
+      icon: Users,
+      sub: null,
+    },
+    {
+      label: "Currently Clocked In",
+      value: stats.clockedIn,
+      icon: UserCheck,
+      sub: `${stats.totalEmployees - stats.clockedIn} clocked out`,
+    },
+    {
+      label: "Hours Today",
+      value: `${stats.hoursToday.toFixed(1)}h`,
+      icon: Hourglass,
+      sub: null,
+    },
+    {
+      label: "Hours This Week",
+      value: `${stats.hoursThisWeek.toFixed(1)}h`,
+      icon: Calendar,
+      sub: null,
+    },
+    {
+      label: "Hours This Month",
+      value: `${stats.hoursThisMonth.toFixed(1)}h`,
+      icon: CalendarDays,
+      sub: null,
+    },
+  ];
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground">Manage your team's time tracking</p>
-        </div>
-        <Button>+ Add Employee</Button>
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Overview of your team's time tracking
+        </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Employees</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        {summaryCards.map(({ label, value, icon: Icon, sub }) => (
+          <Card key={label} className="border-gray-200 shadow-none">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-4 px-5">
+              <CardTitle className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                {label}
+              </CardTitle>
+              <Icon className="h-4 w-4 text-gray-400" />
+            </CardHeader>
+            <CardContent className="px-5 pb-4">
+              <div className="text-2xl font-bold text-gray-900">{value}</div>
+              {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-2 border-gray-200 shadow-none">
+          <CardHeader className="px-5 pt-5 pb-3">
+            <CardTitle className="text-sm font-semibold text-gray-700">
+              Hours Worked — Last 7 Days
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalEmployees}</div>
+          <CardContent className="px-5 pb-5">
+            <HoursChart data={chartData} />
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Clocked In</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
+
+        <Card className="border-gray-200 shadow-none">
+          <CardHeader className="px-5 pt-5 pb-3">
+            <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <Clock className="w-4 h-4" />
+              Currently Clocked In
+              {clockedIn.length > 0 && (
+                <span className="ml-auto text-xs font-normal bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                  {clockedIn.length}
+                </span>
+              )}
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.clockedIn}</div>
-            <p className="text-xs text-muted-foreground">
-              {stats.totalEmployees - stats.clockedIn} clocked out
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Hours Today</CardTitle>
-            <Hourglass className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.hoursToday.toFixed(1)}h</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Hours This Week</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.hoursThisWeek.toFixed(1)}h</div>
+          <CardContent className="px-5 pb-5">
+            {clockedIn.length === 0 ? (
+              <p className="text-sm text-gray-400 py-4 text-center">
+                No one is clocked in
+              </p>
+            ) : (
+              <ul className="space-y-3">
+                {clockedIn.map((emp) => (
+                  <li
+                    key={emp.id}
+                    className="flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-green-400" />
+                      <span className="text-sm font-medium text-gray-800">
+                        {emp.name}
+                      </span>
+                    </div>
+                    <span className="text-xs text-gray-400">
+                      since {format(new Date(emp.clockIn), "h:mm a")}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </CardContent>
         </Card>
       </div>
-
-      <Tabs defaultValue="reports">
-        <TabsList>
-          <TabsTrigger value="reports">Shift Reports</TabsTrigger>
-          <TabsTrigger value="employees">Employees</TabsTrigger>
-        </TabsList>
-        <TabsContent value="reports">
-          <ShiftReportsTable reports={reports} />
-        </TabsContent>
-        <TabsContent value="employees">
-          {/* Employee management table will go here */}
-        </TabsContent>
-      </Tabs>
     </div>
   );
 }
