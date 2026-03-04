@@ -13,7 +13,7 @@ import {
   UserCheck,
 } from "lucide-react";
 import { HoursChart } from "@/components/hours-chart";
-import { format } from "date-fns";
+import { fmtTime } from "@/lib/tz";
 
 export default async function AdminPage() {
   const [stats, chartData, clockedIn] = await Promise.all([
@@ -124,7 +124,7 @@ export default async function AdminPage() {
                       </span>
                     </div>
                     <span className="text-xs text-gray-400">
-                      since {format(new Date(emp.clockIn), "h:mm a")}
+                      since {fmtTime(emp.clockIn)}
                     </span>
                   </li>
                 ))}

@@ -2,9 +2,22 @@
 
 import { useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { format } from "date-fns";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { fmtDate, fmtTime } from "@/lib/tz";
 
 export function ShiftReportsTable({ reports }: { reports: any[] }) {
   const router = useRouter();
@@ -47,10 +60,16 @@ export function ShiftReportsTable({ reports }: { reports: any[] }) {
             {reports.map((report: any) => (
               <TableRow key={report.id}>
                 <TableCell>{report.employee.name}</TableCell>
-                <TableCell>{format(new Date(report.clockIn), "EEE, MMM d")}</TableCell>
-                <TableCell>{format(new Date(report.clockIn), "h:mm a")}</TableCell>
-                <TableCell>{report.clockOut ? format(new Date(report.clockOut), "h:mm a") : "-"}</TableCell>
-                <TableCell>{report.breakMinutes ? `${report.breakMinutes}m ${report.breakType}` : "None"}</TableCell>
+                <TableCell>{fmtDate(report.clockIn)}</TableCell>
+                <TableCell>{fmtTime(report.clockIn)}</TableCell>
+                <TableCell>
+                  {report.clockOut ? fmtTime(report.clockOut) : "-"}
+                </TableCell>
+                <TableCell>
+                  {report.breakMinutes
+                    ? `${report.breakMinutes}m ${report.breakType}`
+                    : "None"}
+                </TableCell>
                 <TableCell>{report.totalHours?.toFixed(1)}h</TableCell>
                 <TableCell>Paid</TableCell>
                 <TableCell>Edit</TableCell>

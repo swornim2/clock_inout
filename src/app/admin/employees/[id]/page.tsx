@@ -1,6 +1,6 @@
 import { getEmployeeProfile, getEmployeeShifts } from "@/app/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { format } from "date-fns";
+import { fmtDate, fmtTime } from "@/lib/tz";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Clock, BarChart2, Repeat2, Calendar } from "lucide-react";
@@ -34,13 +34,22 @@ export default async function EmployeeProfilePage({
 
   if (!profile) notFound();
 
-  const { employee, totalShifts, totalHours, avgShiftHours, mostCommonBreak } = profile;
+  const { employee, totalShifts, totalHours, avgShiftHours, mostCommonBreak } =
+    profile;
 
   const stats = [
     { label: "Total Shifts", value: totalShifts, icon: Calendar },
     { label: "Total Hours", value: `${totalHours.toFixed(1)}h`, icon: Clock },
-    { label: "Avg Shift", value: `${avgShiftHours.toFixed(1)}h`, icon: BarChart2 },
-    { label: "Common Break", value: formatBreakLabel(mostCommonBreak), icon: Repeat2 },
+    {
+      label: "Avg Shift",
+      value: `${avgShiftHours.toFixed(1)}h`,
+      icon: BarChart2,
+    },
+    {
+      label: "Common Break",
+      value: formatBreakLabel(mostCommonBreak),
+      icon: Repeat2,
+    },
   ];
 
   return (
@@ -58,7 +67,7 @@ export default async function EmployeeProfilePage({
       <div>
         <h1 className="text-2xl font-bold text-gray-900">{employee.name}</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Member since {format(new Date(employee.createdAt), "MMMM d, yyyy")}
+          Member since {fmtDate(employee.createdAt)}
         </p>
       </div>
 
@@ -80,17 +89,29 @@ export default async function EmployeeProfilePage({
 
       <Card className="border-gray-200 shadow-none overflow-hidden">
         <CardHeader className="px-5 pt-5 pb-3 border-b border-gray-100">
-          <CardTitle className="text-sm font-semibold text-gray-700">Shift History</CardTitle>
+          <CardTitle className="text-sm font-semibold text-gray-700">
+            Shift History
+          </CardTitle>
         </CardHeader>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50">
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Date</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Clock In</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Clock Out</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Break</th>
-                <th className="text-right px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Hours</th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  Date
+                </th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  Clock In
+                </th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  Clock Out
+                </th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  Break
+                </th>
+                <th className="text-right px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  Hours
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -102,18 +123,23 @@ export default async function EmployeeProfilePage({
                 </tr>
               ) : (
                 shifts.map((shift) => (
-                  <tr key={shift.id} className="hover:bg-gray-50 transition-colors">
+                  <tr
+                    key={shift.id}
+                    className="hover:bg-gray-50 transition-colors"
+                  >
                     <td className="px-5 py-3.5 text-gray-600">
-                      {format(new Date(shift.clockIn), "MMM d, yyyy")}
+                      {fmtDate(shift.clockIn)}
                     </td>
                     <td className="px-5 py-3.5 text-gray-600">
-                      {format(new Date(shift.clockIn), "h:mm a")}
+                      {fmtTime(shift.clockIn)}
                     </td>
                     <td className="px-5 py-3.5 text-gray-600">
                       {shift.clockOut ? (
-                        format(new Date(shift.clockOut), "h:mm a")
+                        fmtTime(shift.clockOut)
                       ) : (
-                        <span className="text-amber-500 font-medium">In progress</span>
+                        <span className="text-amber-500 font-medium">
+                          In progress
+                        </span>
                       )}
                     </td>
                     <td className="px-5 py-3.5 text-gray-500">

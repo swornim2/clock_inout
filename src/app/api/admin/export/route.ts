@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { timeEntries, employees } from "@/lib/db/schema";
 import { and, eq, gte, lte, sql } from "drizzle-orm";
+import { fmtCsvDate, fmtCsvTime } from "@/lib/tz";
 import { format } from "date-fns";
 
 export async function GET(request: NextRequest) {
@@ -23,7 +24,8 @@ export async function GET(request: NextRequest) {
     toDate.setHours(23, 59, 59, 999);
     conditions.push(lte(timeEntries.clockIn, toDate));
   }
-  if (employeeId) conditions.push(eq(timeEntries.employeeId, Number(employeeId)));
+  if (employeeId)
+    conditions.push(eq(timeEntries.employeeId, Number(employeeId)));
 
   const rows = await db
     .select({
@@ -39,7 +41,15 @@ export async function GET(request: NextRequest) {
     .where(and(...conditions))
     .orderBy(timeEntries.clockIn);
 
-  const headers = ["Employee", "Date", "Clock In", "Clock Out", "Break Type", "Break Mins", "Hours Worked"];
+  const headers = [
+    "Employee",
+    "Date",
+    "Clock In",
+    "Clock Out",
+    "Break Type",
+    "Break Mins",
+    "Hours Worked",
+  ];
 
   const escape = (v: string | number | null | undefined) => {
     const s = String(v ?? "");
@@ -53,14 +63,14 @@ export async function GET(request: NextRequest) {
       !r.breakType || r.breakType === "none"
         ? "None"
         : r.breakType === "paid" || r.breakType === "10_paid"
-        ? "10 min paid"
-        : "30 min unpaid";
+          ? "10 min paid"
+          : "30 min unpaid";
 
     return [
       escape(r.employeeName),
-      escape(r.clockIn ? format(new Date(r.clockIn), "yyyy-MM-dd") : ""),
-      escape(r.clockIn ? format(new Date(r.clockIn), "HH:mm") : ""),
-      escape(r.clockOut ? format(new Date(r.clockOut), "HH:mm") : ""),
+      escape(r.clockIn ? fmtCsvDate(r.clockIn) : ""),
+      escape(r.clockIn ? fmtCsvTime(r.clockIn) : ""),
+      escape(r.clockOut ? fmtCsvTime(r.clockOut) : ""),
       escape(breakLabel),
       escape(r.breakMinutes ?? 0),
       escape(r.totalHours != null ? Number(r.totalHours).toFixed(2) : ""),

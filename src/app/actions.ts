@@ -5,15 +5,34 @@ import { employees, timeEntries, insertEmployeeSchema } from "@/lib/db/schema";
 import { eq, and, isNull, gte, lte, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import {
-  startOfDay,
-  startOfWeek,
-  endOfWeek,
-  subWeeks,
-  startOfMonth,
-  subDays,
-  format,
-} from "date-fns";
+import { startOfWeek, endOfWeek, subWeeks, subDays, format } from "date-fns";
+
+const TZ = "Australia/Adelaide";
+
+function toAdelaideLocal(date: Date = new Date()): Date {
+  const str = date.toLocaleString("en-AU", { timeZone: TZ });
+  return new Date(str);
+}
+
+function adelaideStartOfDay(date: Date = new Date()): Date {
+  const local = toAdelaideLocal(date);
+  local.setHours(0, 0, 0, 0);
+  return local;
+}
+
+function adelaideStartOfWeek(date: Date = new Date()): Date {
+  const local = toAdelaideLocal(date);
+  local.setDate(local.getDate() - local.getDay());
+  local.setHours(0, 0, 0, 0);
+  return local;
+}
+
+function adelaideStartOfMonth(date: Date = new Date()): Date {
+  const local = toAdelaideLocal(date);
+  local.setDate(1);
+  local.setHours(0, 0, 0, 0);
+  return local;
+}
 
 export async function checkPin(
   pin: string,
@@ -130,13 +149,13 @@ export async function getDashboardStats() {
     .from(timeEntries)
     .where(isNull(timeEntries.clockOut));
 
-  const today = startOfDay(new Date());
+  const today = adelaideStartOfDay();
   const hoursTodayResult = await db
     .select({ total: sql<number>`sum(${timeEntries.totalHours})` })
     .from(timeEntries)
     .where(gte(timeEntries.clockIn, today));
 
-  const weekStart = startOfWeek(new Date());
+  const weekStart = adelaideStartOfWeek();
   const hoursThisWeekResult = await db
     .select({ total: sql<number>`sum(${timeEntries.totalHours})` })
     .from(timeEntries)
@@ -191,9 +210,9 @@ export async function createEmployee(
 }
 
 export async function getExtendedDashboardStats() {
-  const today = startOfDay(new Date());
-  const weekStart = startOfWeek(new Date());
-  const monthStart = startOfMonth(new Date());
+  const today = adelaideStartOfDay();
+  const weekStart = adelaideStartOfWeek();
+  const monthStart = adelaideStartOfMonth();
 
   const [
     totalEmployeesResult,
@@ -255,7 +274,7 @@ export async function getDailyHoursLast7Days(): Promise<
   { date: string; hours: number }[]
 > {
   const days = Array.from({ length: 7 }, (_, i) =>
-    subDays(startOfDay(new Date()), 6 - i),
+    subDays(adelaideStartOfDay(), 6 - i),
   );
 
   const results = await Promise.all(

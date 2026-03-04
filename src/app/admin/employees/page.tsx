@@ -1,7 +1,7 @@
 import { getAllEmployees } from "@/app/actions";
 import { AddEmployeeForm } from "@/components/add-employee-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { format } from "date-fns";
+import { fmtDate } from "@/lib/tz";
 import Link from "next/link";
 import { ChevronRight, UserPlus } from "lucide-react";
 
@@ -60,7 +60,7 @@ export default async function EmployeesPage() {
                           {emp.pin}
                         </td>
                         <td className="px-5 py-3.5 text-gray-500">
-                          {format(new Date(emp.createdAt), "MMM d, yyyy")}
+                          {fmtDate(emp.createdAt)}
                         </td>
                         <td className="px-5 py-3.5 text-right">
                           <Link

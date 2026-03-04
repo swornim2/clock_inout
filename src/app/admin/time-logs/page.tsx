@@ -1,6 +1,6 @@
 import { getTimeLogs, getAllEmployees } from "@/app/actions";
 import { Card, CardContent } from "@/components/ui/card";
-import { format } from "date-fns";
+import { fmtDate, fmtTime } from "@/lib/tz";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 
@@ -49,7 +49,8 @@ export default async function TimeLogsPage({
   const exportParams = new URLSearchParams();
   if (searchParams.from) exportParams.set("from", searchParams.from);
   if (searchParams.to) exportParams.set("to", searchParams.to);
-  if (searchParams.employeeId) exportParams.set("employeeId", searchParams.employeeId);
+  if (searchParams.employeeId)
+    exportParams.set("employeeId", searchParams.employeeId);
   const exportUrl = `/api/admin/export${exportParams.toString() ? `?${exportParams}` : ""}`;
 
   return (
@@ -58,7 +59,8 @@ export default async function TimeLogsPage({
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Time Logs</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {logsResult.total} completed shift{logsResult.total !== 1 ? "s" : ""}
+            {logsResult.total} completed shift
+            {logsResult.total !== 1 ? "s" : ""}
           </p>
         </div>
         <a
@@ -92,7 +94,9 @@ export default async function TimeLogsPage({
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs text-gray-500 font-medium">Employee</label>
+              <label className="text-xs text-gray-500 font-medium">
+                Employee
+              </label>
               <select
                 name="employeeId"
                 defaultValue={searchParams.employeeId ?? ""}
@@ -129,24 +133,42 @@ export default async function TimeLogsPage({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50">
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Employee</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Date</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Clock In</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Clock Out</th>
-                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Break</th>
-                <th className="text-right px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Hours</th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  Employee
+                </th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  Date
+                </th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  Clock In
+                </th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  Clock Out
+                </th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  Break
+                </th>
+                <th className="text-right px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  Hours
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {logsResult.rows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-12 text-gray-400 text-sm">
+                  <td
+                    colSpan={6}
+                    className="text-center py-12 text-gray-400 text-sm"
+                  >
                     No time logs found
                   </td>
                 </tr>
               ) : (
                 logsResult.rows.map((entry) => (
-                  <tr key={entry.id} className="hover:bg-gray-50 transition-colors">
+                  <tr
+                    key={entry.id}
+                    className="hover:bg-gray-50 transition-colors"
+                  >
                     <td className="px-5 py-3.5 font-medium text-gray-800">
                       <Link
                         href={`/admin/employees/${entry.employee.id}`}
@@ -156,21 +178,27 @@ export default async function TimeLogsPage({
                       </Link>
                     </td>
                     <td className="px-5 py-3.5 text-gray-600">
-                      {format(new Date(entry.clockIn), "MMM d, yyyy")}
+                      {fmtDate(entry.clockIn)}
                     </td>
                     <td className="px-5 py-3.5 text-gray-600">
-                      {format(new Date(entry.clockIn), "h:mm a")}
+                      {fmtTime(entry.clockIn)}
                     </td>
                     <td className="px-5 py-3.5 text-gray-600">
-                      {entry.clockOut
-                        ? format(new Date(entry.clockOut), "h:mm a")
-                        : <span className="text-amber-500 font-medium">In progress</span>}
+                      {entry.clockOut ? (
+                        fmtTime(entry.clockOut)
+                      ) : (
+                        <span className="text-amber-500 font-medium">
+                          In progress
+                        </span>
+                      )}
                     </td>
                     <td className="px-5 py-3.5 text-gray-500">
                       {formatBreak(entry.breakType, entry.breakMinutes)}
                     </td>
                     <td className="px-5 py-3.5 text-right font-medium text-gray-800">
-                      {entry.totalHours != null ? `${Number(entry.totalHours).toFixed(2)}h` : "—"}
+                      {entry.totalHours != null
+                        ? `${Number(entry.totalHours).toFixed(2)}h`
+                        : "—"}
                     </td>
                   </tr>
                 ))
@@ -183,12 +211,15 @@ export default async function TimeLogsPage({
       {logsResult.totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-gray-500">
-            Page {logsResult.page} of {logsResult.totalPages} &middot; {logsResult.total} records
+            Page {logsResult.page} of {logsResult.totalPages} &middot;{" "}
+            {logsResult.total} records
           </p>
           <div className="flex gap-2">
             {logsResult.page > 1 ? (
               <Link
-                href={buildUrl(searchParams, { page: String(logsResult.page - 1) })}
+                href={buildUrl(searchParams, {
+                  page: String(logsResult.page - 1),
+                })}
                 className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
               >
                 <ChevronLeft className="w-4 h-4" /> Prev
@@ -200,7 +231,9 @@ export default async function TimeLogsPage({
             )}
             {logsResult.page < logsResult.totalPages ? (
               <Link
-                href={buildUrl(searchParams, { page: String(logsResult.page + 1) })}
+                href={buildUrl(searchParams, {
+                  page: String(logsResult.page + 1),
+                })}
                 className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
               >
                 Next <ChevronRight className="w-4 h-4" />
