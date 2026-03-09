@@ -74,14 +74,14 @@ export default function ClockPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 tracking-tight mb-4">
+    <main className="min-h-screen min-h-dvh bg-gray-50 flex flex-col items-center justify-center p-4 sm:p-6">
+      <div className="w-full max-w-xs sm:max-w-sm">
+        <div className="text-center mb-6 sm:mb-8">
+          <h1 className="text-3xl sm:text-3xl font-bold text-gray-900 tracking-tight mb-4">
             TimeTrack
           </h1>
           <LiveClock variant="large" />
-          <p className="text-gray-400 mt-4 text-sm">Enter your 4-digit PIN</p>
+          <p className="text-gray-400 mt-4 text-sm">Enter your PIN</p>
         </div>
 
         <PinPad
@@ -93,9 +93,9 @@ export default function ClockPage() {
 
         <button
           onClick={() => setScreen({ name: "list" })}
-          className="mt-6 w-full text-center text-sm text-gray-400 hover:text-gray-700 transition-colors py-2"
+          className="mt-5 w-full text-center text-sm text-gray-400 hover:text-gray-700 transition-colors py-2 touch-manipulation"
         >
-          View currently clocked-in employees →
+          View currently clocked-in →
         </button>
       </div>
 

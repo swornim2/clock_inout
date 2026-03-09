@@ -4,44 +4,98 @@ import { db } from "@/lib/db";
 import { employees, timeEntries, insertEmployeeSchema } from "@/lib/db/schema";
 import { eq, and, isNull, gte, lte, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { z } from "zod";
-import { startOfWeek, endOfWeek, subWeeks, subDays, format } from "date-fns";
+import { subDays, format } from "date-fns";
+import { getWeekDateRange } from "@/lib/tz";
 
 const TZ = "Australia/Adelaide";
 
-function toAdelaideLocal(date: Date = new Date()): Date {
-  const str = date.toLocaleString("en-AU", { timeZone: TZ });
-  return new Date(str);
+async function requireAdmin() {
+  const session = cookies().get("admin-session")?.value;
+  if (!session) throw new Error("Unauthorized");
+}
+
+function getAdeParts(d: Date = new Date()) {
+  const fmt = new Intl.DateTimeFormat("en-AU", {
+    timeZone: TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  const parts = Object.fromEntries(
+    fmt.formatToParts(d).map((p) => [p.type, p.value]),
+  );
+  const wdMap: Record<string, number> = {
+    Sun: 0,
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+  };
+  return {
+    year: Number(parts.year),
+    month: Number(parts.month) - 1,
+    day: Number(parts.day),
+    hour: Number(parts.hour) === 24 ? 0 : Number(parts.hour),
+    minute: Number(parts.minute),
+    second: Number(parts.second),
+    weekday: wdMap[parts.weekday] ?? 1,
+  };
 }
 
 function adelaideStartOfDay(date: Date = new Date()): Date {
-  const local = toAdelaideLocal(date);
-  local.setHours(0, 0, 0, 0);
-  return local;
+  const p = getAdeParts(date);
+  return new Date(p.year, p.month, p.day, 0, 0, 0, 0);
 }
 
 function adelaideStartOfWeek(date: Date = new Date()): Date {
-  const local = toAdelaideLocal(date);
-  const dow = local.getDay();
-  const mondayOffset = dow === 0 ? -6 : 1 - dow;
-  local.setDate(local.getDate() + mondayOffset);
-  local.setHours(0, 0, 0, 0);
-  return local;
-}
-
-function adelaideEndOfWeek(date: Date = new Date()): Date {
-  const start = adelaideStartOfWeek(date);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 6);
-  end.setHours(23, 59, 59, 999);
-  return end;
+  const p = getAdeParts(date);
+  const mondayOffset = p.weekday === 0 ? -6 : 1 - p.weekday;
+  return new Date(p.year, p.month, p.day + mondayOffset, 0, 0, 0, 0);
 }
 
 function adelaideStartOfMonth(date: Date = new Date()): Date {
-  const local = toAdelaideLocal(date);
-  local.setDate(1);
-  local.setHours(0, 0, 0, 0);
-  return local;
+  const p = getAdeParts(date);
+  return new Date(p.year, p.month, 1, 0, 0, 0, 0);
+}
+
+// In-memory PIN rate limiter: key = PIN, value = { count, lockedUntil }
+const pinAttempts = new Map<string, { count: number; lockedUntil: number }>();
+
+async function checkPinRateLimited(pin: string) {
+  const now = Date.now();
+  const entry = pinAttempts.get(pin);
+  if (entry && entry.lockedUntil > now) {
+    const mins = Math.ceil((entry.lockedUntil - now) / 60000);
+    return {
+      locked: true,
+      message: `Too many failed attempts. Try again in ${mins} minute${mins !== 1 ? "s" : ""}.`,
+    };
+  }
+  return { locked: false, message: undefined };
+}
+
+async function recordFailedPin(pin: string) {
+  const now = Date.now();
+  const entry = pinAttempts.get(pin) ?? { count: 0, lockedUntil: 0 };
+  const count = entry.count + 1;
+  if (count >= 5) {
+    pinAttempts.set(pin, { count, lockedUntil: now + 5 * 60 * 1000 });
+  } else {
+    pinAttempts.set(pin, { count, lockedUntil: 0 });
+  }
+}
+
+async function clearPinAttempts(pin: string) {
+  pinAttempts.delete(pin);
 }
 
 export async function checkPin(
@@ -52,12 +106,19 @@ export async function checkPin(
   | { success: true; needsClockOut: true; employeeName: string }
 > {
   try {
+    const rateCheck = await checkPinRateLimited(pin);
+    if (rateCheck.locked)
+      return { success: false, message: rateCheck.message! };
+
     const employee = await db.query.employees.findFirst({
       where: eq(employees.pin, pin),
     });
-    if (!employee)
+    if (!employee) {
+      await recordFailedPin(pin);
       return { success: false, message: "Invalid PIN. Please try again." };
+    }
 
+    await clearPinAttempts(pin);
     const active = await db.query.timeEntries.findFirst({
       where: and(
         eq(timeEntries.employeeId, employee.id),
@@ -182,18 +243,9 @@ export async function getDashboardStats() {
 }
 
 export async function getShiftReports(week?: string) {
-  const now = new Date();
-  let startDate: Date;
-  let endDate: Date;
-
-  if (week === "last") {
-    const lastWeek = subWeeks(now, 1);
-    startDate = startOfWeek(lastWeek);
-    endDate = endOfWeek(lastWeek);
-  } else {
-    startDate = startOfWeek(now);
-    endDate = endOfWeek(now);
-  }
+  const range = getWeekDateRange(week === "last" ? -1 : 0);
+  const startDate = new Date(range.from);
+  const endDate = new Date(range.to + "T23:59:59");
 
   const reports = await db.query.timeEntries.findMany({
     where: and(
@@ -212,6 +264,7 @@ export async function getShiftReports(week?: string) {
 export async function createEmployee(
   values: z.infer<typeof insertEmployeeSchema>,
 ) {
+  await requireAdmin();
   try {
     await db.insert(employees).values(values);
     revalidatePath("/admin/employees");
@@ -222,6 +275,7 @@ export async function createEmployee(
 }
 
 export async function getExtendedDashboardStats() {
+  await requireAdmin();
   const today = adelaideStartOfDay();
   const weekStart = adelaideStartOfWeek();
   const monthStart = adelaideStartOfMonth();
@@ -285,6 +339,7 @@ export async function getExtendedDashboardStats() {
 export async function getDailyHoursLast7Days(): Promise<
   { date: string; hours: number }[]
 > {
+  await requireAdmin();
   const days = Array.from({ length: 7 }, (_, i) =>
     subDays(adelaideStartOfDay(), 6 - i),
   );
@@ -315,6 +370,7 @@ export async function getDailyHoursLast7Days(): Promise<
 }
 
 export async function getAllEmployees() {
+  await requireAdmin();
   return db.select().from(employees).orderBy(employees.name);
 }
 
@@ -327,6 +383,7 @@ export interface TimeLogFilters {
 }
 
 export async function getTimeLogs(filters: TimeLogFilters = {}) {
+  await requireAdmin();
   const PAGE_SIZE = 25;
   const page = Math.max(1, filters.page ?? 1);
   const offset = (page - 1) * PAGE_SIZE;
@@ -393,6 +450,7 @@ export async function getTimeLogs(filters: TimeLogFilters = {}) {
 export async function getTimeLogsAll(
   filters: Omit<TimeLogFilters, "page"> = {},
 ) {
+  await requireAdmin();
   const conditions = [sql`${timeEntries.clockOut} is not null`];
 
   if (filters.from)
@@ -413,6 +471,7 @@ export async function getTimeLogsAll(
 }
 
 export async function getEmployeeProfile(id: number) {
+  await requireAdmin();
   const employee = await db.query.employees.findFirst({
     where: eq(employees.id, id),
   });
@@ -506,6 +565,7 @@ export async function getEmployeeProfile(id: number) {
 }
 
 export async function getEmployeeShifts(id: number) {
+  await requireAdmin();
   return db.query.timeEntries.findMany({
     where: eq(timeEntries.employeeId, id),
     orderBy: (t, { desc }) => [desc(t.clockIn)],
@@ -526,6 +586,7 @@ export async function getClockedInNow() {
 }
 
 export async function markShiftsPaid(ids: number[]) {
+  await requireAdmin();
   if (!ids.length) return { success: false };
   await db
     .update(timeEntries)
@@ -537,6 +598,7 @@ export async function markShiftsPaid(ids: number[]) {
 }
 
 export async function markShiftsUnpaid(ids: number[]) {
+  await requireAdmin();
   if (!ids.length) return { success: false };
   await db
     .update(timeEntries)
@@ -548,6 +610,7 @@ export async function markShiftsUnpaid(ids: number[]) {
 }
 
 export async function getPayrollSummary() {
+  await requireAdmin();
   const rows = await db
     .select({
       employeeId: employees.id,
@@ -571,6 +634,7 @@ export async function getPayrollSummary() {
 }
 
 export async function getTotalOutstandingHours() {
+  await requireAdmin();
   const [result] = await db
     .select({
       total: sql<number>`coalesce(sum(${timeEntries.totalHours}), 0)`,
@@ -586,38 +650,8 @@ export async function getTotalOutstandingHours() {
 }
 
 export async function markEmployeeWeekPaid(employeeId: number) {
-  // Compute current Adelaide week boundaries reliably
-  const _fmt = new Intl.DateTimeFormat("en-AU", {
-    timeZone: "Australia/Adelaide",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    weekday: "short",
-    hour12: false,
-  });
-  const _parts = Object.fromEntries(
-    _fmt.formatToParts(new Date()).map((p) => [p.type, p.value]),
-  );
-  const _wdMap: Record<string, number> = {
-    Sun: 0,
-    Mon: 1,
-    Tue: 2,
-    Wed: 3,
-    Thu: 4,
-    Fri: 5,
-    Sat: 6,
-  };
-  const _dow = _wdMap[_parts.weekday] ?? 1;
-  const _mondayOffset = _dow === 0 ? -6 : 1 - _dow;
-  const weekStart = new Date(
-    Number(_parts.year),
-    Number(_parts.month) - 1,
-    Number(_parts.day) + _mondayOffset,
-    0,
-    0,
-    0,
-    0,
-  );
+  await requireAdmin();
+  const weekStart = adelaideStartOfWeek();
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekStart.getDate() + 6);
   weekEnd.setHours(23, 59, 59, 999);
@@ -639,4 +673,97 @@ export async function markEmployeeWeekPaid(employeeId: number) {
   revalidatePath("/admin");
   revalidatePath("/admin/time-logs");
   return { success: true };
+}
+
+export async function updateEmployee(
+  id: number,
+  values: { name: string; pin: string },
+) {
+  await requireAdmin();
+  try {
+    await db.update(employees).set(values).where(eq(employees.id, id));
+    revalidatePath("/admin/employees");
+    revalidatePath(`/admin/employees/${id}`);
+    return { success: true };
+  } catch {
+    return { success: false, message: "Failed to update employee" };
+  }
+}
+
+export async function deleteEmployee(id: number) {
+  await requireAdmin();
+  try {
+    await db.delete(timeEntries).where(eq(timeEntries.employeeId, id));
+    await db.delete(employees).where(eq(employees.id, id));
+    revalidatePath("/admin/employees");
+    revalidatePath("/admin");
+    return { success: true };
+  } catch {
+    return { success: false, message: "Failed to delete employee" };
+  }
+}
+
+export async function updateTimeEntry(
+  id: number,
+  values: {
+    clockIn: string;
+    clockOut: string;
+    breakType: string;
+    breakMinutes: number;
+  },
+) {
+  await requireAdmin();
+  try {
+    const clockIn = new Date(values.clockIn);
+    const clockOut = new Date(values.clockOut);
+    const rawHours =
+      (clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60);
+    const unpaidDeduction =
+      values.breakType === "unpaid" ? values.breakMinutes / 60 : 0;
+    const totalHours = Math.max(0, rawHours - unpaidDeduction);
+    await db
+      .update(timeEntries)
+      .set({
+        clockIn,
+        clockOut,
+        breakType: values.breakType,
+        breakMinutes: values.breakMinutes,
+        totalHours,
+      })
+      .where(eq(timeEntries.id, id));
+    revalidatePath("/admin/time-logs");
+    revalidatePath("/admin");
+    const entry = await db.query.timeEntries.findFirst({
+      where: eq(timeEntries.id, id),
+    });
+    if (entry) revalidatePath(`/admin/employees/${entry.employeeId}`);
+    return { success: true };
+  } catch {
+    return { success: false, message: "Failed to update time entry" };
+  }
+}
+
+export async function deleteTimeEntry(id: number) {
+  await requireAdmin();
+  try {
+    const entry = await db.query.timeEntries.findFirst({
+      where: eq(timeEntries.id, id),
+    });
+    await db.delete(timeEntries).where(eq(timeEntries.id, id));
+    if (entry) revalidatePath(`/admin/employees/${entry.employeeId}`);
+    revalidatePath("/admin/time-logs");
+    revalidatePath("/admin");
+    return { success: true };
+  } catch {
+    return { success: false, message: "Failed to delete time entry" };
+  }
+}
+
+export async function getEmployeeShiftsLimited(id: number, limit = 50) {
+  await requireAdmin();
+  return db.query.timeEntries.findMany({
+    where: eq(timeEntries.employeeId, id),
+    orderBy: (t, { desc }) => [desc(t.clockIn)],
+    limit,
+  });
 }

@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
       breakType: timeEntries.breakType,
       breakMinutes: timeEntries.breakMinutes,
       totalHours: timeEntries.totalHours,
+      isPaid: timeEntries.isPaid,
     })
     .from(timeEntries)
     .leftJoin(employees, eq(timeEntries.employeeId, employees.id))
@@ -49,6 +50,7 @@ export async function GET(request: NextRequest) {
     "Break Type",
     "Break Mins",
     "Hours Worked",
+    "Pay Status",
   ];
 
   const escape = (v: string | number | null | undefined) => {
@@ -74,6 +76,7 @@ export async function GET(request: NextRequest) {
       escape(breakLabel),
       escape(r.breakMinutes ?? 0),
       escape(r.totalHours != null ? Number(r.totalHours).toFixed(2) : ""),
+      escape(r.isPaid ? "Paid" : "Unpaid"),
     ].join(",");
   });
 

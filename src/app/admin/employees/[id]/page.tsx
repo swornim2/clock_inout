@@ -2,6 +2,10 @@ import { getEmployeeProfile, getEmployeeShifts } from "@/app/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PayrollToggle } from "@/components/payroll-actions";
 import { PayoutWeekButton } from "@/components/payout-week-button";
+import {
+  EditEmployeeButton,
+  EditTimeEntryButton,
+} from "@/components/employee-actions";
 import { fmtDate, fmtTime } from "@/lib/tz";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -114,11 +118,16 @@ export default async function EmployeeProfilePage({
         </Link>
       </div>
 
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">{employee.name}</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Member since {fmtDate(employee.createdAt)}
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">{employee.name}</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Member since {fmtDate(employee.createdAt)}
+          </p>
+        </div>
+        <EditEmployeeButton
+          employee={{ id: employee.id, name: employee.name, pin: employee.pin }}
+        />
       </div>
 
       {/* Stat cards */}
@@ -236,10 +245,21 @@ export default async function EmployeeProfilePage({
                         : "—"}
                     </td>
                     <td className="px-5 py-3.5 text-center">
-                      <PayrollToggle
-                        shiftId={shift.id}
-                        isPaid={shift.isPaid ?? false}
-                      />
+                      <div className="flex items-center justify-center gap-1">
+                        <PayrollToggle
+                          shiftId={shift.id}
+                          isPaid={shift.isPaid ?? false}
+                        />
+                        <EditTimeEntryButton
+                          entry={{
+                            id: shift.id,
+                            clockIn: shift.clockIn,
+                            clockOut: shift.clockOut ?? null,
+                            breakType: shift.breakType ?? null,
+                            breakMinutes: shift.breakMinutes ?? null,
+                          }}
+                        />
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -336,10 +356,21 @@ export default async function EmployeeProfilePage({
                         : "—"}
                     </td>
                     <td className="px-5 py-3.5 text-center">
-                      <PayrollToggle
-                        shiftId={shift.id}
-                        isPaid={shift.isPaid ?? false}
-                      />
+                      <div className="flex items-center justify-center gap-1">
+                        <PayrollToggle
+                          shiftId={shift.id}
+                          isPaid={shift.isPaid ?? false}
+                        />
+                        <EditTimeEntryButton
+                          entry={{
+                            id: shift.id,
+                            clockIn: shift.clockIn,
+                            clockOut: shift.clockOut ?? null,
+                            breakType: shift.breakType ?? null,
+                            breakMinutes: shift.breakMinutes ?? null,
+                          }}
+                        />
+                      </div>
                     </td>
                   </tr>
                 ))
