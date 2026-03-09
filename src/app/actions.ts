@@ -22,9 +22,19 @@ function adelaideStartOfDay(date: Date = new Date()): Date {
 
 function adelaideStartOfWeek(date: Date = new Date()): Date {
   const local = toAdelaideLocal(date);
-  local.setDate(local.getDate() - local.getDay());
+  const dow = local.getDay();
+  const mondayOffset = dow === 0 ? -6 : 1 - dow;
+  local.setDate(local.getDate() + mondayOffset);
   local.setHours(0, 0, 0, 0);
   return local;
+}
+
+function adelaideEndOfWeek(date: Date = new Date()): Date {
+  const start = adelaideStartOfWeek(date);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+  return end;
 }
 
 function adelaideStartOfMonth(date: Date = new Date()): Date {
@@ -104,14 +114,16 @@ export async function clockOut(
 
     const clockInTime = new Date(activeTimeEntry.clockIn).getTime();
     const clockOutTime = Date.now();
-    let hoursWorked = (clockOutTime - clockInTime) / (1000 * 60 * 60);
-    if (breakInfo.type === "unpaid") hoursWorked -= breakInfo.minutes / 60;
+    const rawHours = (clockOutTime - clockInTime) / (1000 * 60 * 60);
+    const unpaidDeduction =
+      breakInfo.type === "unpaid" ? breakInfo.minutes / 60 : 0;
+    const paidHours = Math.max(0, rawHours - unpaidDeduction);
 
     await db
       .update(timeEntries)
       .set({
         clockOut: new Date(),
-        totalHours: hoursWorked,
+        totalHours: paidHours,
         breakMinutes: breakInfo.minutes,
         breakType: breakInfo.type,
       })
@@ -311,6 +323,7 @@ export interface TimeLogFilters {
   to?: string;
   employeeId?: string;
   page?: number;
+  payStatus?: "paid" | "unpaid" | "all";
 }
 
 export async function getTimeLogs(filters: TimeLogFilters = {}) {
@@ -331,10 +344,15 @@ export async function getTimeLogs(filters: TimeLogFilters = {}) {
   if (filters.employeeId) {
     conditions.push(eq(timeEntries.employeeId, Number(filters.employeeId)));
   }
+  if (filters.payStatus === "paid") {
+    conditions.push(sql`${timeEntries.isPaid} = 1`);
+  } else if (filters.payStatus === "unpaid") {
+    conditions.push(sql`${timeEntries.isPaid} = 0`);
+  }
 
   const where = and(...conditions);
 
-  const [rows, countResult] = await Promise.all([
+  const [rows, countResult, totalsResult] = await Promise.all([
     db.query.timeEntries.findMany({
       where,
       with: { employee: true },
@@ -346,14 +364,29 @@ export async function getTimeLogs(filters: TimeLogFilters = {}) {
       .select({ count: sql<number>`count(*)` })
       .from(timeEntries)
       .where(where),
+    db
+      .select({
+        totalPaidHours: sql<number>`coalesce(sum(${timeEntries.totalHours}), 0)`,
+        totalUnpaidMins: sql<number>`coalesce(sum(case when ${timeEntries.breakType} = 'unpaid' then ${timeEntries.breakMinutes} else 0 end), 0)`,
+      })
+      .from(timeEntries)
+      .where(where),
   ]);
 
+  const rowsWithBreakdown = rows.map((r) => ({
+    ...r,
+    paidHours: Number(r.totalHours ?? 0),
+    unpaidBreakHours: r.breakType === "unpaid" ? (r.breakMinutes ?? 0) / 60 : 0,
+  }));
+
   return {
-    rows,
+    rows: rowsWithBreakdown,
     total: Number(countResult[0].count),
     page,
     pageSize: PAGE_SIZE,
     totalPages: Math.ceil(Number(countResult[0].count) / PAGE_SIZE),
+    totalPaidHours: Number(totalsResult[0].totalPaidHours),
+    totalUnpaidHours: Number(totalsResult[0].totalUnpaidMins) / 60,
   };
 }
 
@@ -393,12 +426,63 @@ export async function getEmployeeProfile(id: number) {
     orderBy: (t, { desc }) => [desc(t.clockIn)],
   });
 
+  // Compute Adelaide this-week boundaries (Mon–Sun) using reliable Intl parts
+  const _fmt = new Intl.DateTimeFormat("en-AU", {
+    timeZone: "Australia/Adelaide",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short",
+    hour12: false,
+  });
+  const _parts = Object.fromEntries(
+    _fmt.formatToParts(new Date()).map((p) => [p.type, p.value]),
+  );
+  const _wdMap: Record<string, number> = {
+    Sun: 0,
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+  };
+  const _dow = _wdMap[_parts.weekday] ?? 1;
+  const _mondayOffset = _dow === 0 ? -6 : 1 - _dow;
+  const weekStart = new Date(
+    Number(_parts.year),
+    Number(_parts.month) - 1,
+    Number(_parts.day) + _mondayOffset,
+    0,
+    0,
+    0,
+    0,
+  );
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+  weekEnd.setHours(23, 59, 59, 999);
+
   const totalShifts = shifts.length;
   const totalHours = shifts.reduce(
     (sum, s) => sum + (Number(s.totalHours) || 0),
     0,
   );
   const avgShiftHours = totalShifts > 0 ? totalHours / totalShifts : 0;
+
+  const thisWeekHours = shifts
+    .filter((s) => {
+      const clockInAd = new Date(
+        new Date(s.clockIn).toLocaleString("en-AU", {
+          timeZone: "Australia/Adelaide",
+        }),
+      );
+      return clockInAd >= weekStart && clockInAd <= weekEnd;
+    })
+    .reduce((sum, s) => sum + (Number(s.totalHours) || 0), 0);
+
+  const unpaidHours = shifts
+    .filter((s) => !s.isPaid)
+    .reduce((sum, s) => sum + (Number(s.totalHours) || 0), 0);
 
   const breakCounts: Record<string, number> = {};
   shifts.forEach((s) => {
@@ -413,7 +497,11 @@ export async function getEmployeeProfile(id: number) {
     totalShifts,
     totalHours: Math.round(totalHours * 100) / 100,
     avgShiftHours: Math.round(avgShiftHours * 100) / 100,
+    thisWeekHours: Math.round(thisWeekHours * 100) / 100,
+    unpaidHours: Math.round(unpaidHours * 100) / 100,
     mostCommonBreak,
+    weekStart,
+    weekEnd,
   };
 }
 
@@ -435,4 +523,120 @@ export async function getClockedInNow() {
     name: e.employee.name,
     clockIn: e.clockIn,
   }));
+}
+
+export async function markShiftsPaid(ids: number[]) {
+  if (!ids.length) return { success: false };
+  await db
+    .update(timeEntries)
+    .set({ isPaid: true })
+    .where(sql`${timeEntries.id} in ${ids}`);
+  revalidatePath("/admin/time-logs");
+  revalidatePath("/admin");
+  return { success: true };
+}
+
+export async function markShiftsUnpaid(ids: number[]) {
+  if (!ids.length) return { success: false };
+  await db
+    .update(timeEntries)
+    .set({ isPaid: false })
+    .where(sql`${timeEntries.id} in ${ids}`);
+  revalidatePath("/admin/time-logs");
+  revalidatePath("/admin");
+  return { success: true };
+}
+
+export async function getPayrollSummary() {
+  const rows = await db
+    .select({
+      employeeId: employees.id,
+      employeeName: employees.name,
+      unpaidHours: sql<number>`coalesce(sum(case when ${timeEntries.isPaid} = 0 and ${timeEntries.clockOut} is not null then ${timeEntries.totalHours} else 0 end), 0)`,
+      paidHours: sql<number>`coalesce(sum(case when ${timeEntries.isPaid} = 1 then ${timeEntries.totalHours} else 0 end), 0)`,
+      unpaidShifts: sql<number>`coalesce(sum(case when ${timeEntries.isPaid} = 0 and ${timeEntries.clockOut} is not null then 1 else 0 end), 0)`,
+    })
+    .from(employees)
+    .leftJoin(timeEntries, eq(timeEntries.employeeId, employees.id))
+    .groupBy(employees.id)
+    .orderBy(employees.name);
+
+  return rows.map((r) => ({
+    employeeId: r.employeeId,
+    employeeName: r.employeeName,
+    unpaidHours: Number(r.unpaidHours),
+    paidHours: Number(r.paidHours),
+    unpaidShifts: Number(r.unpaidShifts),
+  }));
+}
+
+export async function getTotalOutstandingHours() {
+  const [result] = await db
+    .select({
+      total: sql<number>`coalesce(sum(${timeEntries.totalHours}), 0)`,
+    })
+    .from(timeEntries)
+    .where(
+      and(
+        sql`${timeEntries.isPaid} = 0`,
+        sql`${timeEntries.clockOut} is not null`,
+      ),
+    );
+  return Number(result.total);
+}
+
+export async function markEmployeeWeekPaid(employeeId: number) {
+  // Compute current Adelaide week boundaries reliably
+  const _fmt = new Intl.DateTimeFormat("en-AU", {
+    timeZone: "Australia/Adelaide",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short",
+    hour12: false,
+  });
+  const _parts = Object.fromEntries(
+    _fmt.formatToParts(new Date()).map((p) => [p.type, p.value]),
+  );
+  const _wdMap: Record<string, number> = {
+    Sun: 0,
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+  };
+  const _dow = _wdMap[_parts.weekday] ?? 1;
+  const _mondayOffset = _dow === 0 ? -6 : 1 - _dow;
+  const weekStart = new Date(
+    Number(_parts.year),
+    Number(_parts.month) - 1,
+    Number(_parts.day) + _mondayOffset,
+    0,
+    0,
+    0,
+    0,
+  );
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+  weekEnd.setHours(23, 59, 59, 999);
+
+  await db
+    .update(timeEntries)
+    .set({ isPaid: true })
+    .where(
+      and(
+        eq(timeEntries.employeeId, employeeId),
+        sql`${timeEntries.isPaid} = 0`,
+        sql`${timeEntries.clockOut} is not null`,
+        gte(timeEntries.clockIn, weekStart),
+        lte(timeEntries.clockIn, weekEnd),
+      ),
+    );
+
+  revalidatePath(`/admin/employees/${employeeId}`);
+  revalidatePath("/admin");
+  revalidatePath("/admin/time-logs");
+  return { success: true };
 }

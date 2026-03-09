@@ -2,6 +2,7 @@ import {
   getExtendedDashboardStats,
   getDailyHoursLast7Days,
   getClockedInNow,
+  getTotalOutstandingHours,
 } from "@/app/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -11,16 +12,18 @@ import {
   Calendar,
   CalendarDays,
   UserCheck,
+  AlertCircle,
 } from "lucide-react";
 import { HoursChart } from "@/components/hours-chart";
 import { fmtTime } from "@/lib/tz";
 import { LiveClock } from "@/components/live-clock";
 
 export default async function AdminPage() {
-  const [stats, chartData, clockedIn] = await Promise.all([
+  const [stats, chartData, clockedIn, outstandingHours] = await Promise.all([
     getExtendedDashboardStats(),
     getDailyHoursLast7Days(),
     getClockedInNow(),
+    getTotalOutstandingHours(),
   ]);
 
   const summaryCards = [
@@ -54,6 +57,13 @@ export default async function AdminPage() {
       icon: CalendarDays,
       sub: null,
     },
+    {
+      label: "Outstanding Pay",
+      value: `${outstandingHours.toFixed(1)}h`,
+      icon: AlertCircle,
+      sub: outstandingHours > 0 ? "unpaid hours" : "all paid",
+      highlight: outstandingHours > 0,
+    },
   ];
 
   return (
@@ -70,18 +80,43 @@ export default async function AdminPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        {summaryCards.map(({ label, value, icon: Icon, sub }) => (
-          <Card key={label} className="border-gray-200 shadow-none">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        {summaryCards.map(({ label, value, icon: Icon, sub, highlight }) => (
+          <Card
+            key={label}
+            className={`shadow-none ${
+              highlight ? "border-orange-300 bg-orange-50" : "border-gray-200"
+            }`}
+          >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pt-4 px-5">
-              <CardTitle className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+              <CardTitle
+                className={`text-xs font-medium uppercase tracking-wide ${
+                  highlight ? "text-orange-600" : "text-gray-500"
+                }`}
+              >
                 {label}
               </CardTitle>
-              <Icon className="h-4 w-4 text-gray-400" />
+              <Icon
+                className={`h-4 w-4 ${highlight ? "text-orange-400" : "text-gray-400"}`}
+              />
             </CardHeader>
             <CardContent className="px-5 pb-4">
-              <div className="text-2xl font-bold text-gray-900">{value}</div>
-              {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
+              <div
+                className={`text-2xl font-bold ${
+                  highlight ? "text-orange-700" : "text-gray-900"
+                }`}
+              >
+                {value}
+              </div>
+              {sub && (
+                <p
+                  className={`text-xs mt-1 ${
+                    highlight ? "text-orange-500" : "text-gray-400"
+                  }`}
+                >
+                  {sub}
+                </p>
+              )}
             </CardContent>
           </Card>
         ))}

@@ -1,6 +1,7 @@
-import { getTimeLogs, getAllEmployees } from "@/app/actions";
+import { getTimeLogs, getAllEmployees, getPayrollSummary } from "@/app/actions";
 import { Card, CardContent } from "@/components/ui/card";
-import { fmtDate, fmtTime } from "@/lib/tz";
+import { fmtDate, fmtTime, getWeekDateRange } from "@/lib/tz";
+import { PayrollToggle } from "@/components/payroll-actions";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Download } from "lucide-react";
 
@@ -9,13 +10,15 @@ interface SearchParams {
   to?: string;
   employeeId?: string;
   page?: string;
+  payStatus?: string;
 }
 
 function formatBreak(breakType: string | null, breakMinutes: number | null) {
   if (!breakType || breakType === "none") return "—";
   const mins = breakMinutes ?? 0;
-  const paid = breakType === "paid" || breakType === "10_paid";
-  return `${mins}m ${paid ? "(paid)" : "(unpaid)"}`;
+  if (breakType === "paid") return `${mins}m paid`;
+  if (breakType === "unpaid") return `${mins}m unpaid`;
+  return `${mins}m`;
 }
 
 function buildUrl(params: SearchParams, overrides: Partial<SearchParams>) {
@@ -24,9 +27,17 @@ function buildUrl(params: SearchParams, overrides: Partial<SearchParams>) {
   if (merged.from) q.set("from", merged.from);
   if (merged.to) q.set("to", merged.to);
   if (merged.employeeId) q.set("employeeId", merged.employeeId);
+  if (merged.payStatus && merged.payStatus !== "all")
+    q.set("payStatus", merged.payStatus);
   if (merged.page && merged.page !== "1") q.set("page", merged.page);
   const str = q.toString();
   return `/admin/time-logs${str ? `?${str}` : ""}`;
+}
+
+function weekUrl(range: { from: string; to: string }, employeeId?: string) {
+  const q = new URLSearchParams({ from: range.from, to: range.to });
+  if (employeeId) q.set("employeeId", employeeId);
+  return `/admin/time-logs?${q.toString()}`;
 }
 
 export default async function TimeLogsPage({
@@ -36,14 +47,22 @@ export default async function TimeLogsPage({
 }) {
   const page = Number(searchParams.page ?? 1);
 
-  const [logsResult, allEmployees] = await Promise.all([
+  const thisWeek = getWeekDateRange(0);
+  const lastWeek = getWeekDateRange(-1);
+
+  const payStatus =
+    (searchParams.payStatus as "paid" | "unpaid" | "all") ?? "all";
+
+  const [logsResult, allEmployees, payrollSummary] = await Promise.all([
     getTimeLogs({
       from: searchParams.from,
       to: searchParams.to,
       employeeId: searchParams.employeeId,
       page,
+      payStatus,
     }),
     getAllEmployees(),
+    getPayrollSummary(),
   ]);
 
   const exportParams = new URLSearchParams();
@@ -52,6 +71,16 @@ export default async function TimeLogsPage({
   if (searchParams.employeeId)
     exportParams.set("employeeId", searchParams.employeeId);
   const exportUrl = `/api/admin/export${exportParams.toString() ? `?${exportParams}` : ""}`;
+
+  const isThisWeek =
+    searchParams.from === thisWeek.from && searchParams.to === thisWeek.to;
+  const isLastWeek =
+    searchParams.from === lastWeek.from && searchParams.to === lastWeek.to;
+
+  const totalOutstanding = payrollSummary.reduce(
+    (s, r) => s + r.unpaidHours,
+    0,
+  );
 
   return (
     <div className="space-y-6">
@@ -72,9 +101,123 @@ export default async function TimeLogsPage({
         </a>
       </div>
 
+      {/* Payroll summary panel */}
+      {payrollSummary.some((r) => r.unpaidHours > 0) && (
+        <Card className="border-orange-200 bg-orange-50 shadow-none">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-orange-800">
+                Outstanding Pay Summary
+              </h2>
+              <span className="text-sm font-bold text-orange-900">
+                {totalOutstanding.toFixed(2)}h total unpaid
+              </span>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {payrollSummary
+                .filter((r) => r.unpaidHours > 0)
+                .map((r) => (
+                  <div
+                    key={r.employeeId}
+                    className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-orange-100"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">
+                        {r.employeeName}
+                      </p>
+                      <p className="text-xs text-orange-500">
+                        {r.unpaidShifts} shift{r.unpaidShifts !== 1 ? "s" : ""}{" "}
+                        outstanding
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-base font-bold text-orange-700">
+                        {r.unpaidHours.toFixed(2)}h
+                      </p>
+                      <Link
+                        href={buildUrl(
+                          {
+                            employeeId: String(r.employeeId),
+                            payStatus: "unpaid",
+                          },
+                          {},
+                        )}
+                        className="text-xs text-orange-400 hover:text-orange-600 hover:underline"
+                      >
+                        View →
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Week quick filters */}
+      <div className="flex gap-2 flex-wrap">
+        <Link
+          href={weekUrl(thisWeek, searchParams.employeeId)}
+          className={`px-4 py-1.5 rounded-lg border text-sm font-medium transition-colors ${
+            isThisWeek
+              ? "bg-gray-900 text-white border-gray-900"
+              : "border-gray-200 text-gray-600 hover:bg-gray-50"
+          }`}
+        >
+          This Week
+        </Link>
+        <Link
+          href={weekUrl(lastWeek, searchParams.employeeId)}
+          className={`px-4 py-1.5 rounded-lg border text-sm font-medium transition-colors ${
+            isLastWeek
+              ? "bg-gray-900 text-white border-gray-900"
+              : "border-gray-200 text-gray-600 hover:bg-gray-50"
+          }`}
+        >
+          Last Week
+        </Link>
+        <div className="h-6 w-px bg-gray-200 self-center" />
+        {(["all", "unpaid", "paid"] as const).map((s) => (
+          <Link
+            key={s}
+            href={buildUrl(searchParams, { payStatus: s, page: "1" })}
+            className={`px-4 py-1.5 rounded-lg border text-sm font-medium transition-colors capitalize ${
+              payStatus === s
+                ? s === "unpaid"
+                  ? "bg-orange-600 text-white border-orange-600"
+                  : s === "paid"
+                    ? "bg-green-700 text-white border-green-700"
+                    : "bg-gray-900 text-white border-gray-900"
+                : "border-gray-200 text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            {s === "all"
+              ? "All Shifts"
+              : s === "unpaid"
+                ? "Unpaid Only"
+                : "Paid Only"}
+          </Link>
+        ))}
+        {(isThisWeek || isLastWeek || payStatus !== "all") && (
+          <Link
+            href="/admin/time-logs"
+            className="px-4 py-1.5 rounded-lg border border-gray-100 text-gray-400 text-sm hover:bg-gray-50 transition-colors"
+          >
+            Clear all
+          </Link>
+        )}
+      </div>
+
       <Card className="border-gray-200 shadow-none">
         <CardContent className="p-5">
           <form method="GET" className="flex flex-wrap gap-3">
+            {searchParams.payStatus && (
+              <input
+                type="hidden"
+                name="payStatus"
+                value={searchParams.payStatus}
+              />
+            )}
             <div className="flex flex-col gap-1">
               <label className="text-xs text-gray-500 font-medium">From</label>
               <input
@@ -151,13 +294,16 @@ export default async function TimeLogsPage({
                 <th className="text-right px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
                   Hours
                 </th>
+                <th className="text-center px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  Pay Status
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {logsResult.rows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="text-center py-12 text-gray-400 text-sm"
                   >
                     No time logs found
@@ -167,7 +313,7 @@ export default async function TimeLogsPage({
                 logsResult.rows.map((entry) => (
                   <tr
                     key={entry.id}
-                    className="hover:bg-gray-50 transition-colors"
+                    className={`hover:bg-gray-50 transition-colors ${entry.isPaid ? "" : "bg-orange-50/30"}`}
                   >
                     <td className="px-5 py-3.5 font-medium text-gray-800">
                       <Link
@@ -196,9 +342,15 @@ export default async function TimeLogsPage({
                       {formatBreak(entry.breakType, entry.breakMinutes)}
                     </td>
                     <td className="px-5 py-3.5 text-right font-medium text-gray-800">
-                      {entry.totalHours != null
-                        ? `${Number(entry.totalHours).toFixed(2)}h`
+                      {entry.paidHours > 0
+                        ? `${entry.paidHours.toFixed(2)}h`
                         : "—"}
+                    </td>
+                    <td className="px-5 py-3.5 text-center">
+                      <PayrollToggle
+                        shiftId={entry.id}
+                        isPaid={entry.isPaid ?? false}
+                      />
                     </td>
                   </tr>
                 ))

@@ -3,6 +3,7 @@ import {
   sqliteTable,
   text,
   integer,
+  real,
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 import { createInsertSchema } from "drizzle-zod";
@@ -26,7 +27,7 @@ export const timeEntries = sqliteTable("time_entries", {
   clockOut: integer("clock_out", { mode: "timestamp" }),
   breakType: text("break_type"),
   breakMinutes: integer("break_minutes").default(0),
-  totalHours: integer("total_hours"),
+  totalHours: real("total_hours"),
   isPaid: integer("is_paid", { mode: "boolean" }).default(false),
 });
 
