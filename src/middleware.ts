@@ -6,15 +6,17 @@ import { NextRequest, NextResponse } from "next/server";
 const ALLOWED_PREFIX = process.env.ALLOWED_CLOCK_PREFIX?.trim().toLowerCase();
 const IS_PROD = process.env.NODE_ENV === "production";
 
-function getClientIp(req: NextRequest): string {
-  // Netlify's reliable true-client IP header
+function getCandidateIps(req: NextRequest): string[] {
+  const ips: string[] = [];
   const nfIp = req.headers.get("x-nf-client-connection-ip");
-  if (nfIp) return nfIp.trim().toLowerCase();
+  if (nfIp) ips.push(nfIp.trim().toLowerCase());
   const forwarded = req.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0].trim().toLowerCase();
+  if (forwarded)
+    forwarded.split(",").forEach((ip) => ips.push(ip.trim().toLowerCase()));
   const realIp = req.headers.get("x-real-ip");
-  if (realIp) return realIp.trim().toLowerCase();
-  return (req.ip ?? "").toLowerCase();
+  if (realIp) ips.push(realIp.trim().toLowerCase());
+  if (req.ip) ips.push(req.ip.toLowerCase());
+  return ips;
 }
 
 export function middleware(req: NextRequest) {
@@ -26,13 +28,17 @@ export function middleware(req: NextRequest) {
   // Only enforce in production and when a prefix is configured
   if (!IS_PROD || !ALLOWED_PREFIX) return NextResponse.next();
 
-  const clientIp = getClientIp(req);
+  // Allow if ANY candidate IP matches the prefix
+  const allowed = getCandidateIps(req).some((ip) =>
+    ip.startsWith(ALLOWED_PREFIX),
+  );
 
-  // Match on prefix — works even when the last 4 groups of the IPv6 rotate
-  if (!clientIp.startsWith(ALLOWED_PREFIX)) {
+  if (!allowed) {
     const blocked = req.nextUrl.clone();
     blocked.pathname = "/clock-blocked";
-    return NextResponse.redirect(blocked);
+    const res = NextResponse.redirect(blocked);
+    res.headers.set("Cache-Control", "no-store");
+    return res;
   }
 
   return NextResponse.next();
