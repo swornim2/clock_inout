@@ -31,14 +31,41 @@ export const timeEntries = sqliteTable("time_entries", {
   isPaid: integer("is_paid", { mode: "boolean" }).default(false),
 });
 
+export const notifications = sqliteTable("notifications", {
+  id: integer("id").primaryKey(),
+  employeeId: integer("employee_id")
+    .notNull()
+    .references(() => employees.id),
+  timeEntryId: integer("time_entry_id")
+    .notNull()
+    .references(() => timeEntries.id),
+  message: text("message").notNull(),
+  resolvedAt: integer("resolved_at", { mode: "timestamp" }),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(strftime('%s', 'now'))`),
+});
+
 export const employeeRelations = relations(employees, ({ many }) => ({
   timeEntries: many(timeEntries),
+  notifications: many(notifications),
 }));
 
 export const timeEntryRelations = relations(timeEntries, ({ one }) => ({
   employee: one(employees, {
     fields: [timeEntries.employeeId],
     references: [employees.id],
+  }),
+}));
+
+export const notificationRelations = relations(notifications, ({ one }) => ({
+  employee: one(employees, {
+    fields: [notifications.employeeId],
+    references: [employees.id],
+  }),
+  timeEntry: one(timeEntries, {
+    fields: [notifications.timeEntryId],
+    references: [timeEntries.id],
   }),
 }));
 
@@ -55,3 +82,4 @@ export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;
 export type Employee = typeof employees.$inferSelect;
 export type InsertTimeEntry = z.infer<typeof insertTimeEntrySchema>;
 export type TimeEntry = typeof timeEntries.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;

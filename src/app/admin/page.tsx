@@ -3,6 +3,7 @@ import {
   getDailyHoursLast7Days,
   getClockedInNow,
   getTotalOutstandingHours,
+  getUnresolvedNotifications,
 } from "@/app/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -17,14 +18,17 @@ import {
 import { HoursChart } from "@/components/hours-chart";
 import { fmtTime } from "@/lib/tz";
 import { LiveClock } from "@/components/live-clock";
+import { NotificationsPanel } from "@/components/notifications-panel";
 
 export default async function AdminPage() {
-  const [stats, chartData, clockedIn, outstandingHours] = await Promise.all([
-    getExtendedDashboardStats(),
-    getDailyHoursLast7Days(),
-    getClockedInNow(),
-    getTotalOutstandingHours(),
-  ]);
+  const [stats, chartData, clockedIn, outstandingHours, unresolvedNotifs] =
+    await Promise.all([
+      getExtendedDashboardStats(),
+      getDailyHoursLast7Days(),
+      getClockedInNow(),
+      getTotalOutstandingHours(),
+      getUnresolvedNotifications(),
+    ]);
 
   const summaryCards = [
     {
@@ -68,6 +72,7 @@ export default async function AdminPage() {
 
   return (
     <div className="space-y-8">
+      <NotificationsPanel notifications={unresolvedNotifs as any} />
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>

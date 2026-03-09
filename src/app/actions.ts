@@ -1,7 +1,12 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { employees, timeEntries, insertEmployeeSchema } from "@/lib/db/schema";
+import {
+  employees,
+  timeEntries,
+  notifications,
+  insertEmployeeSchema,
+} from "@/lib/db/schema";
 import { eq, and, isNull, gte, lte, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
@@ -766,4 +771,25 @@ export async function getEmployeeShiftsLimited(id: number, limit = 50) {
     orderBy: (t, { desc }) => [desc(t.clockIn)],
     limit,
   });
+}
+
+export async function getUnresolvedNotifications() {
+  await requireAdmin();
+  return db.query.notifications.findMany({
+    where: isNull(notifications.resolvedAt),
+    with: {
+      employee: true,
+      timeEntry: true,
+    },
+    orderBy: (n, { desc }) => [desc(n.createdAt)],
+  });
+}
+
+export async function resolveNotification(id: number) {
+  await requireAdmin();
+  await db
+    .update(notifications)
+    .set({ resolvedAt: new Date() })
+    .where(eq(notifications.id, id));
+  revalidatePath("/admin");
 }
