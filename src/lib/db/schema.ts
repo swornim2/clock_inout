@@ -29,6 +29,7 @@ export const timeEntries = sqliteTable("time_entries", {
   breakMinutes: integer("break_minutes").default(0),
   totalHours: real("total_hours"),
   isPaid: integer("is_paid", { mode: "boolean" }).default(false),
+  location: text("location"),
 });
 
 export const notifications = sqliteTable("notifications", {

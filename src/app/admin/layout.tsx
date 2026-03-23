@@ -9,12 +9,14 @@ import {
   Download,
   LogOut,
   Timer,
+  DollarSign,
 } from "lucide-react";
 
 const navItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/time-logs", label: "Time Logs", icon: Clock },
   { href: "/admin/employees", label: "Employees", icon: Users },
+  { href: "/admin/payroll", label: "Payroll", icon: DollarSign },
   { href: "/admin/export", label: "Export CSV", icon: Download },
 ];
 

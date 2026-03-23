@@ -7,6 +7,7 @@ import { ClockOutModal } from "@/components/clock-out-modal";
 import { ClockedInPanel } from "@/components/clocked-in-panel";
 import { SuccessOverlay } from "@/components/success-overlay";
 import { LiveClock } from "@/components/live-clock";
+import { KioskGate, useKioskLocation } from "@/components/kiosk-gate";
 
 type Screen =
   | { name: "pin" }
@@ -14,10 +15,11 @@ type Screen =
   | { name: "success"; message: string; type: "in" | "out" }
   | { name: "list" };
 
-export default function ClockPage() {
+function ClockContent() {
   const [screen, setScreen] = useState<Screen>({ name: "pin" });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const location = useKioskLocation();
 
   useEffect(() => {
     if (screen.name === "success") {
@@ -38,7 +40,7 @@ export default function ClockPage() {
       if (result.needsClockOut) {
         setScreen({ name: "clockout", employeeName: result.employeeName, pin });
       } else {
-        const res = await clockIn(pin);
+        const res = await clockIn(pin, location ?? undefined);
         if (!res.success) {
           setError(res.message);
           return;
@@ -80,6 +82,11 @@ export default function ClockPage() {
           <h1 className="text-3xl sm:text-3xl font-bold text-gray-900 tracking-tight mb-4">
             TimeTrack
           </h1>
+          {location && (
+            <p className="text-xs font-medium text-gray-400 -mt-3 mb-1 tracking-wide uppercase">
+              {location}
+            </p>
+          )}
           <LiveClock variant="large" />
           <p className="text-gray-400 mt-4 text-sm">Enter your PIN</p>
         </div>
@@ -113,5 +120,13 @@ export default function ClockPage() {
         <ClockedInPanel onClose={() => setScreen({ name: "pin" })} />
       )}
     </main>
+  );
+}
+
+export default function ClockPage() {
+  return (
+    <KioskGate>
+      <ClockContent />
+    </KioskGate>
   );
 }

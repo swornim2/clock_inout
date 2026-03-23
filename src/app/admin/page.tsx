@@ -19,6 +19,7 @@ import { HoursChart } from "@/components/hours-chart";
 import { fmtTime } from "@/lib/tz";
 import { LiveClock } from "@/components/live-clock";
 import { NotificationsPanel } from "@/components/notifications-panel";
+import { ClockOutAllButton } from "@/components/clock-out-all-button";
 
 export default async function AdminPage() {
   const [stats, chartData, clockedIn, outstandingHours, unresolvedNotifs] =
@@ -145,10 +146,13 @@ export default async function AdminPage() {
               <Clock className="w-4 h-4" />
               Currently Clocked In
               {clockedIn.length > 0 && (
-                <span className="ml-auto text-xs font-normal bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                <span className="text-xs font-normal bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
                   {clockedIn.length}
                 </span>
               )}
+              <div className="ml-auto">
+                <ClockOutAllButton count={clockedIn.length} />
+              </div>
             </CardTitle>
           </CardHeader>
           <CardContent className="px-5 pb-5">

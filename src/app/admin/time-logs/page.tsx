@@ -11,6 +11,7 @@ interface SearchParams {
   employeeId?: string;
   page?: string;
   payStatus?: string;
+  location?: string;
 }
 
 function formatBreak(breakType: string | null, breakMinutes: number | null) {
@@ -29,6 +30,7 @@ function buildUrl(params: SearchParams, overrides: Partial<SearchParams>) {
   if (merged.employeeId) q.set("employeeId", merged.employeeId);
   if (merged.payStatus && merged.payStatus !== "all")
     q.set("payStatus", merged.payStatus);
+  if (merged.location) q.set("location", merged.location);
   if (merged.page && merged.page !== "1") q.set("page", merged.page);
   const str = q.toString();
   return `/admin/time-logs${str ? `?${str}` : ""}`;
@@ -60,6 +62,7 @@ export default async function TimeLogsPage({
       employeeId: searchParams.employeeId,
       page,
       payStatus,
+      location: searchParams.location,
     }),
     getAllEmployees(),
     getPayrollSummary(),
@@ -253,6 +256,20 @@ export default async function TimeLogsPage({
                 ))}
               </select>
             </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-gray-500 font-medium">
+                Location
+              </label>
+              <select
+                name="location"
+                defaultValue={searchParams.location ?? ""}
+                className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-300 bg-white"
+              >
+                <option value="">All locations</option>
+                <option value="Findon">Findon</option>
+                <option value="Firle">Firle</option>
+              </select>
+            </div>
             <div className="flex items-end gap-2">
               <button
                 type="submit"
@@ -294,6 +311,9 @@ export default async function TimeLogsPage({
                 <th className="text-right px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
                   Hours
                 </th>
+                <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  Location
+                </th>
                 <th className="text-center px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">
                   Pay Status
                 </th>
@@ -303,7 +323,7 @@ export default async function TimeLogsPage({
               {logsResult.rows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="text-center py-12 text-gray-400 text-sm"
                   >
                     No time logs found
@@ -345,6 +365,21 @@ export default async function TimeLogsPage({
                       {entry.paidHours > 0
                         ? `${entry.paidHours.toFixed(2)}h`
                         : "—"}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      {entry.location ? (
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                            entry.location === "Findon"
+                              ? "bg-blue-100 text-blue-700"
+                              : "bg-purple-100 text-purple-700"
+                          }`}
+                        >
+                          {entry.location}
+                        </span>
+                      ) : (
+                        <span className="text-gray-300">—</span>
+                      )}
                     </td>
                     <td className="px-5 py-3.5 text-center">
                       <PayrollToggle

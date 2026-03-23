@@ -143,6 +143,7 @@ export async function checkPin(
 
 export async function clockIn(
   pin: string,
+  location?: string,
 ): Promise<{ success: boolean; message: string }> {
   try {
     const employee = await db.query.employees.findFirst({
@@ -153,6 +154,7 @@ export async function clockIn(
     await db.insert(timeEntries).values({
       employeeId: employee.id,
       clockIn: new Date(),
+      location: location ?? null,
     });
     return { success: true, message: `Welcome, ${employee.name}!` };
   } catch {
@@ -385,6 +387,7 @@ export interface TimeLogFilters {
   employeeId?: string;
   page?: number;
   payStatus?: "paid" | "unpaid" | "all";
+  location?: string;
 }
 
 export async function getTimeLogs(filters: TimeLogFilters = {}) {
@@ -410,6 +413,9 @@ export async function getTimeLogs(filters: TimeLogFilters = {}) {
     conditions.push(sql`${timeEntries.isPaid} = 1`);
   } else if (filters.payStatus === "unpaid") {
     conditions.push(sql`${timeEntries.isPaid} = 0`);
+  }
+  if (filters.location) {
+    conditions.push(eq(timeEntries.location, filters.location));
   }
 
   const where = and(...conditions);
@@ -771,6 +777,34 @@ export async function getEmployeeShiftsLimited(id: number, limit = 50) {
     orderBy: (t, { desc }) => [desc(t.clockIn)],
     limit,
   });
+}
+
+export async function clockOutAll(): Promise<{
+  success: boolean;
+  count: number;
+}> {
+  await requireAdmin();
+  const open = await db.query.timeEntries.findMany({
+    where: isNull(timeEntries.clockOut),
+  });
+  if (open.length === 0) return { success: true, count: 0 };
+
+  const now = new Date();
+  for (const entry of open) {
+    const clockInTime = new Date(entry.clockIn).getTime();
+    const rawHours = (now.getTime() - clockInTime) / (1000 * 60 * 60);
+    await db
+      .update(timeEntries)
+      .set({
+        clockOut: now,
+        totalHours: Math.round(rawHours * 100) / 100,
+        breakMinutes: 0,
+        breakType: "none",
+      })
+      .where(eq(timeEntries.id, entry.id));
+  }
+  revalidatePath("/admin");
+  return { success: true, count: open.length };
 }
 
 export async function getUnresolvedNotifications() {
